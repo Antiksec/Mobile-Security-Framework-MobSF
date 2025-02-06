@@ -11,9 +11,12 @@ import logging
 from urllib.request import (
     HTTPSHandler,
     ProxyHandler,
+    Request,
     build_opener,
     install_opener,
 )
+
+from mobsf.MobSF.settings import (PLAYSTORE)
 
 from django.conf import settings
 
@@ -51,7 +54,12 @@ def get_app_details(app_dic, man_data):
         https_handler = HTTPSHandler(context=ssl_context)
         opener = build_opener(proxy_handler, https_handler)
         install_opener(opener)
-        det = app(package_id)
+        try:
+            with opener.open(Request(PLAYSTORE), timeout=5) as response:
+                if response.status == 200:
+                    det = app(package_id)
+        except Exception:
+            logger.warning(f'Play Store unreachable, skipping')
         det.pop('descriptionHTML', None)
         det.pop('comments', None)
         description = BeautifulSoup(det['description'], features='lxml')

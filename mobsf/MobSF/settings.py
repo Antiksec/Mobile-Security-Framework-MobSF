@@ -138,6 +138,7 @@ GITHUB_URL = ('https://github.com/MobSF/Mobile-Security-Framework-MobSF/'
               'releases/latest')
 FRIDA_SERVER = 'https://api.github.com/repos/frida/frida/releases/tags/'
 GOOGLE = 'https://www.google.com'
+PLAYSTORE = 'https://play.google.com'
 BAIDU = 'https://www.baidu.com/'
 APKPURE = 'https://m.apkpure.com/android/{}/download?from=details'
 APKTADA = 'https://apktada.com/download-apk/'
@@ -503,7 +504,7 @@ else:
     UPSTREAM_PROXY_ENABLED = bool(os.getenv(
         'MOBSF_UPSTREAM_PROXY_ENABLED', ''))
     UPSTREAM_PROXY_SSL_VERIFY = os.getenv(
-        'MOBSF_UPSTREAM_PROXY_SSL_VERIFY', 'True')
+        'MOBSF_UPSTREAM_PROXY_SSL_VERIFY', '1')
     UPSTREAM_PROXY_TYPE = os.getenv('MOBSF_UPSTREAM_PROXY_TYPE', 'http')
     UPSTREAM_PROXY_IP = os.getenv('MOBSF_UPSTREAM_PROXY_IP', '127.0.0.1')
     UPSTREAM_PROXY_PORT = int(os.getenv('MOBSF_UPSTREAM_PROXY_PORT', '3128'))
