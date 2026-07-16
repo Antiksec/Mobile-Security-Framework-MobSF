@@ -19,7 +19,6 @@ import stat
 import sqlite3
 import unicodedata
 import threading
-from urllib.parse import unquote
 from pathlib import Path
 from concurrent.futures import (
     ThreadPoolExecutor,
@@ -42,6 +41,7 @@ from mobsf.MobSF. init import api_key
 
 from . import settings
 
+
 logger = logging.getLogger(__name__)
 ADB_PATH = None
 BASE64_REGEX = re.compile(r'^[-A-Za-z0-9+/]*={0,3}$')
@@ -62,6 +62,9 @@ GOOGLE_API_KEY_REGEX = re.compile(r'AIza[0-9A-Za-z-_]{35}$')
 GOOGLE_APP_ID_REGEX = re.compile(r'\d{1,2}:\d{1,50}:android:[a-f0-9]{1,50}')
 PKG_REGEX = re.compile(
     r'package\s+([a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*);')
+IOS_DEVICE_ID_REGEX = re.compile(r'^[a-fA-F0-9-]{20,40}$')
+SSH_DEVICE_ID_REGEX = re.compile(
+    r'^(?:\[(?P<ipv6>[^\]]+)\]|(?P<host>[^:\[\]]+)):(?P<port>\d{1,5})$')
 
 
 class Color(object):
@@ -544,31 +547,28 @@ def read_sqlite(sqlite_file):
     logger.info('Reading SQLite db')
     table_dict = {}
     try:
-        con = sqlite3.connect(sqlite_file)
+        con = sqlite3.connect(f'file:{sqlite_file}?mode=ro', uri=True)
         cur = con.cursor()
         cur.execute('SELECT name FROM sqlite_master WHERE type=\'table\';')
         tables = cur.fetchall()
         for table in tables:
-            table_dict[table[0]] = {'head': [], 'data': []}
-            cur.execute('PRAGMA table_info(\'%s\')' % table)
+            table_name = table[0]
+            safe_name = table_name.replace('"', '""')
+            table_dict[table_name] = {'head': [], 'data': []}
+            cur.execute(f'PRAGMA table_info("{safe_name}")')
             rows = cur.fetchall()
             for sq_row in rows:
-                table_dict[table[0]]['head'].append(sq_row[1])
-            cur.execute('SELECT * FROM \'%s\'' % table)
+                table_dict[table_name]['head'].append(sq_row[1])
+            cur.execute(f'SELECT * FROM "{safe_name}"')
             rows = cur.fetchall()
             for sq_row in rows:
                 tmp_row = []
                 for each_row in sq_row:
                     tmp_row.append(str(each_row))
-                table_dict[table[0]]['data'].append(tmp_row)
+                table_dict[table_name]['data'].append(tmp_row)
     except Exception:
         logger.exception('Reading SQLite db')
     return table_dict
-
-
-def is_pipe_or_link(path):
-    """Check for named pipe."""
-    return os.path.islink(path) or stat.S_ISFIFO(os.stat(path).st_mode)
 
 
 def get_network():
@@ -605,15 +605,6 @@ def get_proxy_ip(identifier):
     return proxy_ip
 
 
-def is_safe_path(safe_root, check_path, raw_file):
-    """Detect Path Traversal."""
-    if is_path_traversal(raw_file):
-        return False
-    safe_root = os.path.realpath(os.path.normpath(safe_root))
-    check_path = os.path.realpath(os.path.normpath(check_path))
-    return os.path.commonprefix([check_path, safe_root]) == safe_root
-
-
 def file_size(app_path):
     """Return the size of the file."""
     return round(float(os.path.getsize(app_path)) / (1024 * 1024), 2)
@@ -637,30 +628,6 @@ def get_config_loc():
         )
     else:
         return 'MobSF/settings.py'
-
-
-def clean_filename(filename, replace=' '):
-    if platform.system() == 'Windows':
-        whitelist = f'-_.() {string.ascii_letters}{string.digits}'
-        # replace spaces
-        for r in replace:
-            filename = filename.replace(r, '_')
-        # keep only valid ascii chars
-        cleaned_filename = unicodedata.normalize(
-            'NFKD', filename).encode('ASCII', 'ignore').decode()
-        # keep only whitelisted chars
-        return ''.join(c for c in cleaned_filename if c in whitelist)
-    return filename
-
-
-def cmd_injection_check(data):
-    """OS Cmd Injection from Commix."""
-    breakers = [
-        ';', '%3B', '&', '%26', '&&',
-        '%26%26', '|', '%7C', '||',
-        '%7C%7C', '%0a', '%0d%0a',
-    ]
-    return any(i in data for i in breakers)
 
 
 def strict_package_check(user_input):
@@ -705,45 +672,6 @@ def common_check(instance_id):
             'message': 'Invalid instance identifier'}
     else:
         return None
-
-
-def is_path_traversal(user_input):
-    """Check for path traversal."""
-    if not user_input:
-        return False
-
-    # Disallow absolute paths and windows paths and backslashes
-    if os.path.isabs(user_input) or user_input.startswith(('\\', '//')):
-        logger.error('Path traversal attack detected with absolute path')
-        return True
-
-    # Normalize and decode URL-encoded characters
-    try:
-        # Handle URL decoding (e.g., %2e -> .)
-        decoded = unquote(user_input)
-        # Handle double URL decoding (e.g., %252e -> %2e -> .)
-        double_decoded = unquote(decoded)
-    except Exception:
-        logger.error('Path traversal attack detected with invalid URL encoding')
-        return True
-
-    # Check for path traversal in both original and decoded versions
-    dangerous_patterns = ['..', '../', '..\\', '..\\\\']
-
-    # Check original filename
-    if any(pattern in user_input for pattern in dangerous_patterns):
-        logger.error('Path traversal attack detected with invalid path')
-        return True
-
-    # Check decoded versions
-    if any(pattern in decoded for pattern in dangerous_patterns):
-        logger.error('Path traversal attack detected with invalid path')
-        return True
-
-    if any(pattern in double_decoded for pattern in dangerous_patterns):
-        logger.error('Path traversal attack detected with invalid path')
-        return True
-    return False
 
 
 def is_zip_magic(file_obj):
@@ -998,3 +926,16 @@ def set_permissions(path):
                 item.chmod(perm_file)
         except Exception:
             pass
+
+
+def parse_host_port(text):
+    # Match [IPv6]:port OR host:port
+    ipv6_match = re.match(r'^\[(.+)\]:(\d+)$', text)
+    if ipv6_match:
+        return ipv6_match.group(1), int(ipv6_match.group(2))
+
+    ipv4_match = re.match(r'^([^:]+):(\d+)$', text)
+    if ipv4_match:
+        return ipv4_match.group(1), int(ipv4_match.group(2))
+
+    raise ValueError('Input must be in format host:port or [IPv6]:port')

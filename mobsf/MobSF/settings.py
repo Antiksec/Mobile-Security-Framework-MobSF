@@ -192,23 +192,14 @@ INSTALLED_APPS = (
     'mobsf.MobSF',
     'mobsf.MalwareAnalyzer',
 )
-MIDDLEWARE_CLASSES = (
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_ratelimit.middleware.RatelimitMiddleware',
-)
 MIDDLEWARE = (
+    'django.middleware.security.SecurityMiddleware',
     'mobsf.MobSF.views.api.api_middleware.RestApiAuthMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 ROOT_URLCONF = 'mobsf.MobSF.urls'
 WSGI_APPLICATION = 'mobsf.MobSF.wsgi.application'
@@ -532,6 +523,16 @@ else:
     # if VT_UPLOAD is set to True.
     # ===============================================
     # =======IOS DYNAMIC ANALYSIS SETTINGS===========
+    # Should be SSH IP:PORT, example: 192.168.1.100:22
+    # Field also supports multiple devices, example: 192.168.1.100:22,192.168.1.101:22
+    IOS_ANALYZER_IDENTIFIERS = os.getenv('MOBSF_IOS_ANALYZER_IDENTIFIERS', '')
+    # SSH credentials for jailbroken iOS device (USB or WiFi path)
+    # Defaults match the standard jailbreak SSH default (root/alpine)
+    IOS_SSH_USER = os.getenv('MOBSF_IOS_SSH_USER', 'root')
+    IOS_SSH_PASSWORD = os.getenv('MOBSF_IOS_SSH_PASSWORD', 'alpine')
+    # ==============================================
+
+    # =======IOS DYNAMIC ANALYSIS CORELLIUM SETTINGS===========
     CORELLIUM_API_DOMAIN = os.getenv('MOBSF_CORELLIUM_API_DOMAIN', '')
     CORELLIUM_API_KEY = os.getenv('MOBSF_CORELLIUM_API_KEY', '')
     CORELLIUM_PROJECT_ID = os.getenv('MOBSF_CORELLIUM_PROJECT_ID', '')
